@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Gerenciador de OS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+#header{background:#1E50A0;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:56px;flex-shrink:0;gap:8px}
+#header h1{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#header-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+#header-user{font-size:12px;color:#B4CCEE;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+#btn-sair{background:#C41E1E;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+#btn-sair:hover{background:#a51818}
+#btn-menu{display:none;background:none;border:none;cursor:pointer;padding:6px;color:#fff;flex-shrink:0}
+#btn-menu svg{display:block}
+#body{display:flex;flex:1;overflow:hidden;position:relative}
+#sidebar{width:220px;background:#fff;border-right:1px solid #e0e4ef;display:flex;flex-direction:column;padding:16px 0;flex-shrink:0;transition:transform .25s ease;z-index:200}
+.nav-btn{display:flex;align-items:center;gap:10px;padding:12px 20px;font-size:14px;font-weight:500;color:#3c3c50;background:none;border:none;cursor:pointer;width:100%;text-align:left;transition:background .15s,color .15s}
+.nav-btn:hover{background:#f0f4ff;color:#1E50A0}
+.nav-btn.active{background:#1E50A0;color:#fff}
+.nav-btn.disabled{color:#b08080;background:#501f1f;cursor:not-allowed}
+.nav-btn.disabled:hover{background:#501f1f;color:#b08080}
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:199}
+#content{flex:1;overflow-y:auto;padding:20px;-webkit-overflow-scrolling:touch}
+.page-title{font-size:20px;font-weight:700;color:#19234a;margin-bottom:4px}
+.page-sub{font-size:13px;color:#888;margin-bottom:18px}
+.charts-row{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;margin-bottom:18px;align-items:stretch}
+.chart-card{background:#fff;border-radius:10px;border:1px solid #e5e9f0;padding:16px}
+.chart-card h3{font-size:13px;font-weight:700;color:#19234a;margin-bottom:12px}
+.summary-card{background:#fff;border-radius:10px;border:1px solid #e5e9f0;padding:16px;min-width:150px}
+.summary-card h3{font-size:13px;font-weight:700;color:#19234a;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #eef0f5}
+.summary-item{display:flex;justify-content:space-between;align-items:center;padding:5px 0}
+.summary-item .lbl{font-size:11px;color:#888}
+.summary-item .val{font-size:15px;font-weight:700}
+.filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filter-bar input,.filter-bar select{padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#f7faff;color:#1a1a1a;outline:none;min-width:0}
+.filter-bar input:focus,.filter-bar select:focus{border-color:#1E50A0}
+.btn-clear{padding:7px 12px;background:#dde0e8;color:#3c3c50;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn-clear:hover{background:#cdd0d8}
+.table-wrap{background:#fff;border-radius:10px;border:1px solid #e5e9f0;overflow:hidden}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}
+thead tr{background:#1e1e1e}
+thead th{color:#fff;font-weight:700;padding:11px 10px;text-align:left;white-space:nowrap}
+tbody tr{border-bottom:1px solid #f0f2f6;transition:background .12s}
+tbody tr:nth-child(even){background:#f7f8fb}
+tbody tr:hover{background:#eef2fc}
+tbody td{padding:10px 10px;color:#2a2d3c;vertical-align:middle}
+/* clickable rows */
+tbody tr.clickable{cursor:pointer}
+tbody tr.clickable:hover{background:#ddeaff}
+tbody tr.row-selected{background:#ddeaff !important;border-left:3px solid #1E50A0}
+.badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge-yellow{background:#fff4cd;color:#a05a00}
+.badge-blue{background:#dce9ff;color:#1E50A0}
+.badge-green{background:#dcffe8;color:#00824a}
+.badge-red{background:#ffdede;color:#aa1e1e}
+.badge-gray{background:#ebebeb;color:#555}
+
+/* ── OS DETAIL PANEL ── */
+#os-detail-panel{
+  position:fixed;
+  right:0;top:56px;bottom:0;
+  width:360px;
+  background:#fff;
+  border-left:1px solid #dde3f0;
+  box-shadow:-4px 0 20px rgba(0,0,0,.08);
+  display:flex;flex-direction:column;
+  z-index:150;
+  transform:translateX(100%);
+  transition:transform .3s cubic-bezier(.4,0,.2,1);
+  overflow:hidden;
+}
+#os-detail-panel.open{transform:translateX(0)}
+#os-detail-panel .panel-header{
+  background:#1E50A0;color:#fff;
+  padding:14px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+#os-detail-panel .panel-header h3{font-size:14px;font-weight:700}
+#btn-close-panel{background:none;border:none;color:#fff;cursor:pointer;font-size:20px;line-height:1;padding:2px 6px;border-radius:4px;opacity:.8}
+#btn-close-panel:hover{opacity:1;background:rgba(255,255,255,.15)}
+#os-detail-panel .panel-body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+.detail-section{margin-bottom:16px}
+.detail-section-title{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #eef0f5}
+.detail-row{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+.detail-row .dl{font-size:11px;color:#888;font-weight:500}
+.detail-row .dv{font-size:13px;color:#1a1a1a;font-weight:500;word-break:break-word}
+.detail-row .dv.texto{font-size:13px;color:#3c3c50;line-height:1.55;white-space:pre-wrap}
+.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px}
+.sig-item{background:#f7faff;border:1px solid #e5e9f0;border-radius:8px;padding:10px 8px;text-align:center}
+.sig-item .si-label{font-size:10px;color:#888;font-weight:600;margin-bottom:6px}
+.sig-item .si-icon{font-size:20px;line-height:1}
+.sig-item.signed{background:#f0fdf4;border-color:#86efac}
+.sig-item.pending{background:#fff9f0;border-color:#fcd34d}
+#os-detail-panel .panel-footer{
+  padding:14px 16px;
+  border-top:1px solid #eef0f5;
+  flex-shrink:0;
+}
+
+/* content shift when panel open (desktop) */
+@media (min-width:769px){
+  body.panel-open #content{
+    margin-right:360px;
+    transition:margin-right .3s cubic-bezier(.4,0,.2,1);
+  }
+}
+
+.form-section{background:#fff;border-radius:10px;border:1px solid #e5e9f0;padding:24px;max-width:680px;margin:0 auto}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:700;color:#323268;margin-bottom:6px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:14px;background:#f7faff;color:#1a1a1a;outline:none;font-family:inherit}
+.form-group textarea{resize:vertical;min-height:100px}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#1E50A0;box-shadow:0 0 0 3px rgba(30,80,160,.1)}
+.btn-primary{padding:11px 28px;background:#1E50A0;color:#fff;border:none;border-radius:7px;font-size:15px;font-weight:700;cursor:pointer;transition:background .15s;width:100%}
+.btn-primary:hover{background:#174290}
+.btn-primary:disabled{background:#7096c8;cursor:not-allowed}
+.btn-success{background:#00874c;color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}
+.btn-success:hover{background:#006e3d}
+.btn-edit{background:#1E50A0;color:#fff;border:none;padding:6px 11px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer}
+.btn-edit:hover{background:#174290}
+.btn-del{background:#b41e1e;color:#fff;border:none;padding:6px 11px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer}
+.btn-del:hover{background:#921818}
+.btn-sign{background:#00874c;color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;width:100%}
+.btn-sign:hover{background:#006e3d}
+.btn-sign:disabled{background:#aaa;cursor:not-allowed}
+.btn-sign-sm{background:#00874c;color:#fff;border:none;padding:7px 14px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-sign-sm:hover{background:#006e3d}
+.btn-sign-sm:disabled{background:#aaa;cursor:not-allowed}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px}
+.modal{background:#fff;border-radius:16px;padding:24px;width:100%;max-width:520px;max-height:92dvh;overflow-y:auto}
+.modal h2{font-size:17px;font-weight:700;color:#19234a;margin-bottom:18px}
+.modal-footer{display:flex;gap:10px;margin-top:18px}
+.modal-footer .btn-primary{width:auto;flex:1}
+.empty{color:#888;font-size:14px;padding:20px}
+.loading{color:#888;font-size:14px;padding:20px;display:flex;align-items:center;gap:8px}
+.spinner{width:18px;height:18px;border:3px solid #ddd;border-top-color:#1E50A0;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+[data-tip]{position:relative;cursor:not-allowed}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:100%;top:50%;transform:translateY(-50%);background:#333;color:#fff;font-size:11px;padding:4px 8px;border-radius:4px;white-space:nowrap;margin-left:8px;z-index:100}
+.action-btns{display:flex;gap:5px;flex-wrap:wrap}
+.btn-sm-green{background:#00874c;color:#fff;border:none;padding:5px 9px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-sm-green:hover{background:#006e3d}
+.btn-sm-green:disabled{background:#aaa;cursor:not-allowed}
+.btn-sm-red{background:#b41e1e;color:#fff;border:none;padding:5px 9px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-sm-red:hover{background:#921818}
+.alert-inline{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px}
+
+/* ── EXPORT MODAL ── */
+.export-list{max-height:340px;overflow-y:auto;border:1px solid #e5e9f0;border-radius:8px;margin-bottom:14px}
+.export-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #f0f2f6;cursor:pointer;transition:background .12s}
+.export-item:last-child{border-bottom:none}
+.export-item:hover{background:#f5f8ff}
+.export-item input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:#1E50A0;flex-shrink:0}
+.export-item-info{flex:1;min-width:0}
+.export-item-title{font-size:13px;font-weight:600;color:#1a1a1a}
+.export-item-sub{font-size:11px;color:#888;margin-top:1px}
+.export-status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot-green{background:#28AA5A}
+.dot-red{background:#D23C3C}
+.dot-yellow{background:#FFC33C}
+.dot-blue{background:#3C82D2}
+.export-select-all{display:flex;align-items:center;gap:8px;font-size:12px;color:#1E50A0;cursor:pointer;margin-bottom:8px;font-weight:600;user-select:none}
+.export-count{font-size:12px;color:#888;margin-left:auto}
+.btn-export-pdf{background:#7c3aed;color:#fff;border:none;padding:11px 24px;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s;flex:1;justify-content:center}
+.btn-export-pdf:hover{background:#6d28d9}
+.btn-export-pdf:disabled{background:#aaa;cursor:not-allowed}
+.nav-btn-export{color:#7c3aed !important}
+.nav-btn-export.active{background:#7c3aed !important;color:#fff !important}
+
+/* ══ PRINT / PDF ══ */
+@media print{
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  body,html{background:#fff !important;height:auto !important;overflow:visible !important}
+  #header,#sidebar,#sidebar-overlay,#os-detail-panel,#modal,#content,#body{display:none !important}
+  #print-area{display:block !important}
+  .pdf-cover{page-break-after:always;padding:48px 48px 40px;font-family:'Segoe UI',Arial,sans-serif}
+  .pdf-os{page-break-after:always;padding:36px 48px;font-family:'Segoe UI',Arial,sans-serif}
+  .pdf-os:last-child{page-break-after:auto}
+}
+#print-area{display:none}
+
+/* ══ RESPONSIVE ══ */
+@media (max-width:768px){
+  #btn-menu{display:flex}
+  #header-user{display:none}
+  #header h1{font-size:13px}
+  #sidebar{position:fixed;top:0;left:0;bottom:0;transform:translateX(-100%);box-shadow:4px 0 20px rgba(0,0,0,.15)}
+  #sidebar.open{transform:translateX(0)}
+  #sidebar-overlay.open{display:block}
+  #content{padding:14px}
+  .charts-row{grid-template-columns:1fr}
+  .summary-card{min-width:unset}
+  .filter-bar{flex-direction:column;align-items:stretch}
+  .filter-bar input,.filter-bar select,.btn-clear{width:100%}
+  .page-title{font-size:17px}
+  .form-section{padding:16px}
+  .btn-primary{font-size:14px;padding:12px}
+  .table-scroll::after{content:'← deslize para ver mais →';display:block;text-align:center;font-size:11px;color:#aaa;padding:6px 0}
+  .page-header-row{flex-direction:column;align-items:flex-start;gap:10px}
+  .page-header-row .btn-success{width:100%}
+
+  /* panel mobile: slide from bottom */
+  #os-detail-panel{
+    top:auto;left:0;right:0;bottom:0;
+    width:100%;
+    height:82dvh;
+    border-left:none;
+    border-top:1px solid #dde3f0;
+    border-radius:16px 16px 0 0;
+    box-shadow:0 -4px 24px rgba(0,0,0,.12);
+    transform:translateY(100%);
+  }
+  #os-detail-panel.open{transform:translateY(0)}
+}
+@media (max-width:420px){
+  #header h1{font-size:12px}
+  .badge{font-size:10px;padding:2px 6px}
+  tbody td{padding:8px 8px;font-size:12px}
+  thead th{font-size:12px;padding:9px 8px}
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <button id="btn-menu" aria-label="Menu" onclick="toggleSidebar()">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <h1>📋 Gerenciador de Ordens de Serviço</h1>
+  <div id="header-right">
+    <span id="header-user"></span>
+    <button id="btn-sair">⬅ Sair</button>
+  </div>
+</div>
+
+<div id="body">
+  <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+  <nav id="sidebar">
+    <button class="nav-btn active" id="nav-dashboard" onclick="navigate('dashboard')">📈 Dashboard</button>
+    <button class="nav-btn" id="nav-criar"    onclick="navigate('criar')">➕ Criar OS</button>
+    <button class="nav-btn" id="nav-assinar"  onclick="navigate('assinar')">✅ Assinar OS</button>
+    <button class="nav-btn" id="nav-usuarios" onclick="navigate('usuarios')">👥 Gerenciar Usuários</button>
+    <button class="nav-btn" id="nav-oscs"     onclick="navigate('oscs')">🛠️ Gerenciar OSs</button>
+    <button class="nav-btn nav-btn-export" id="nav-exportar" onclick="navigate('exportar')">📄 Exportar PDF</button>
+  </nav>
+  <main id="content">
+    <div class="loading"><div class="spinner"></div> Carregando...</div>
+  </main>
+</div>
+
+<!-- OS DETAIL PANEL -->
+<div id="os-detail-panel">
+  <div class="panel-header">
+    <h3 id="panel-title">Detalhes da OS</h3>
+    <button id="btn-close-panel" onclick="closeDetailPanel()" title="Fechar">✕</button>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+  <div class="panel-footer" id="panel-footer"></div>
+</div>
+
+<!-- MODAL -->
+<!-- PRINT AREA -->
+<div id="print-area"></div>
+
+<div class="modal-overlay" id="modal" style="display:none">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<script>
+const URL_BASE = 'https://triumphant-clarity-production-264b.up.railway.app';
+
+let token = localStorage.getItem('os_token') || '';
+let usuario = null;
+try { usuario = JSON.parse(localStorage.getItem('os_usuario') || 'null'); } catch(e){}
+if (!token || !usuario) { window.location.href = 'login.html'; }
+
+/* ── SIDEBAR ── */
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+/* ── DETAIL PANEL ── */
+let currentDetailId = null;
+function openDetailPanel(os) {
+  currentDetailId = os.id;
+  document.getElementById('panel-title').textContent = `OS-${String(os.id).padStart(3,'0')}`;
+
+  const dt = os.dataEmissao ? new Date(os.dataEmissao).toLocaleString('pt-BR') : '—';
+  const jaSig = jaAssinou(os);
+
+  const sigItems = [
+    {label:'Garantia Val.', signed: os.qualidadeAssinou},
+    {label:'Mecatrônica',   signed: os.engenhariaAssinou},
+    {label:'Operação',      signed: os.producaoAssinou},
+  ];
+
+  document.getElementById('panel-body').innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Identificação</div>
+      <div class="detail-row">
+        <span class="dl">Número</span>
+        <span class="dv">OS-${String(os.id).padStart(3,'0')}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dl">Status</span>
+        <span class="dv">${statusBadge(os.status)}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dl">Data de Emissão</span>
+        <span class="dv">${dt}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dl">Emitente</span>
+        <span class="dv">${os.emitenteNome || '—'}</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Informações</div>
+      <div class="detail-row">
+        <span class="dl">Equipamento</span>
+        <span class="dv">${os.equipamento || '—'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dl">Descrição</span>
+        <span class="dv texto">${os.descricao || '—'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dl">Ação Tomada</span>
+        <span class="dv texto">${os.acaoTomada || '—'}</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Assinaturas</div>
+      <div class="sig-grid">
+        ${sigItems.map(s=>`
+          <div class="sig-item ${s.signed?'signed':'pending'}">
+            <div class="si-label">${s.label}</div>
+            <div class="si-icon">${s.signed?'✅':'⏳'}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  document.getElementById('panel-footer').innerHTML = jaSig
+    ? `<button class="btn-sign" disabled>✅ Seu setor já assinou</button>`
+    : `<button class="btn-sign" onclick="assinarOSPanel(${os.id},'${(os.descricao||'').replace(/'/g,"\\'")}')">✍️ Assinar esta OS</button>`;
+
+  document.getElementById('os-detail-panel').classList.add('open');
+  document.body.classList.add('panel-open');
+
+  // highlight row
+  document.querySelectorAll('tbody tr.clickable').forEach(r=>r.classList.remove('row-selected'));
+  const row = document.querySelector(`tr[data-os-id="${os.id}"]`);
+  if(row) row.classList.add('row-selected');
+}
+function closeDetailPanel(){
+  document.getElementById('os-detail-panel').classList.remove('open');
+  document.body.classList.remove('panel-open');
+  document.querySelectorAll('tbody tr.clickable').forEach(r=>r.classList.remove('row-selected'));
+  currentDetailId = null;
+}
+
+/* ── HELPERS ── */
+const $ = id => document.getElementById(id);
+const content = () => $('content');
+function headers(){ return {'Content-Type':'application/json','Authorization':`Bearer ${token}`}; }
+async function api(method,path,body){
+  const opts={method,headers:headers()};
+  if(body!==undefined) opts.body=JSON.stringify(body);
+  return fetch(URL_BASE+path,opts);
+}
+function exibirSetor(s){
+  return ({qualidade:'Garantia de Validação',engenharia:'Mecatrônica',producao:'Operação'})[String(s||'').toLowerCase()]||s||'—';
+}
+function setorParaApi(label){
+  return ({'Garantia de Validação':'Qualidade','Mecatrônica':'Engenharia','Operação':'Producao'})[label]||label;
+}
+function statusBadge(s){
+  const map={
+    aguardandoassinaturas:['badge-yellow','Ag. Assinaturas'],
+    aguardandovalidacao:  ['badge-blue',  'Ag. Validação'],
+    concluida:            ['badge-green', 'Concluída'],
+    cancelada:            ['badge-red',   'Cancelada'],
+  };
+  const [cls,txt]=map[String(s||'').toLowerCase()]||['badge-gray',s||'—'];
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+function signaturasBadge(o){
+  const total=(o.qualidadeAssinou?1:0)+(o.engenhariaAssinou?1:0)+(o.producaoAssinou?1:0);
+  const cls=total===3?'badge-green':total>0?'badge-yellow':'badge-red';
+  const q=o.qualidadeAssinou?'✅':'⏳',e=o.engenhariaAssinou?'✅':'⏳',p=o.producaoAssinou?'✅':'⏳';
+  return `<span class="badge ${cls}">${total}/3</span> <small style="color:#888">G${q}M${e}O${p}</small>`;
+}
+function jaAssinou(osc){
+  const s=String(usuario.setor||usuario.Setor||'').toLowerCase();
+  if(s==='qualidade')  return osc.qualidadeAssinou;
+  if(s==='engenharia') return osc.engenhariaAssinou;
+  if(s==='producao')   return osc.producaoAssinou;
+  return false;
+}
+function perfil()   { return String(usuario.perfil||usuario.Perfil||'').toLowerCase(); }
+function userId()   { return usuario.id||usuario.Id; }
+function userName() { return usuario.nome||usuario.Nome||''; }
+function userPerfil(){ return usuario.perfil||usuario.Perfil||''; }
+function userSetor(){ return usuario.setor||usuario.Setor||''; }
+function ordemStatus(s){
+  return ({aguardandoassinaturas:0,aguardandovalidacao:1,concluida:2,cancelada:3})[String(s||'').toLowerCase()]??0;
+}
+function openModal(html){
+  $('modal-body').innerHTML=html;
+  $('modal').style.display='flex';
+  document.body.style.overflow='hidden';
+}
+function closeModal(){
+  $('modal').style.display='none';
+  document.body.style.overflow='';
+}
+$('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeModal();});
+function showAlert(msg,type='error'){
+  const color=type==='success'?'#f0fdf4':'#fef2f2';
+  const border=type==='success'?'#86efac':'#fca5a5';
+  const text=type==='success'?'#15803d':'#b91c1c';
+  const el=document.createElement('div');
+  el.className='alert-inline';
+  el.style.cssText=`background:${color};border:1px solid ${border};color:${text}`;
+  el.textContent=msg;
+  content().prepend(el);
+  setTimeout(()=>el.remove(),4000);
+}
+
+/* ── NAV ── */
+function setupNav(){
+  $('header-user').textContent=`👤 ${userName()}  |  ${userPerfil()}`;
+  const p=perfil(), isAdmin=p==='administrador'||p==='admin';
+  function lockBtn(id,tip){const b=$(id);b.classList.add('disabled');b.setAttribute('data-tip',tip);b.onclick=()=>{};}
+  if(!(p==='emitente'||isAdmin)) lockBtn('nav-criar',   '⛔ Sem acesso');
+  if(p!=='gerente')              lockBtn('nav-assinar',  '⛔ Somente Gerentes');
+  if(!isAdmin)                   lockBtn('nav-usuarios', '⛔ Somente Admins');
+  if(!isAdmin)                   lockBtn('nav-oscs',     '⛔ Somente Admins');
+}
+function setActive(id){
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const btn=$(id);
+  if(btn&&!btn.classList.contains('disabled')) btn.classList.add('active');
+}
+function navigate(page){
+  const p=perfil(), isAdmin=p==='administrador'||p==='admin';
+  if(page==='criar'    &&p!=='emitente'&&!isAdmin) return;
+  if(page==='assinar'  &&p!=='gerente') return;
+  if(page==='usuarios' &&!isAdmin) return;
+  if(page==='oscs'     &&!isAdmin) return;
+  setActive('nav-'+page);
+  closeSidebar();
+  closeDetailPanel();
+  pages[page]();
+}
+$('btn-sair').onclick=()=>{
+  if(confirm('Deseja sair da conta?')){
+    localStorage.removeItem('os_token');
+    localStorage.removeItem('os_usuario');
+    window.location.href='login.html';
+  }
+};
+
+/* ── CHARTS ── */
+let chartPie=null,chartBar=null;
+function renderCharts(lista){
+  const counts={aguardandoassinaturas:0,aguardandovalidacao:0,concluida:0,cancelada:0};
+  lista.forEach(o=>{const k=String(o.status||'').toLowerCase();if(k in counts)counts[k]++;});
+  const sigs=[0,1,2,3].map(n=>lista.filter(o=>{
+    const t=(o.qualidadeAssinou?1:0)+(o.engenhariaAssinou?1:0)+(o.producaoAssinou?1:0);
+    return t===n;
+  }).length);
+  if(chartPie) chartPie.destroy();
+  if(chartBar) chartBar.destroy();
+  const ctxPie=$('chartPie'),ctxBar=$('chartBar');
+  if(!ctxPie||!ctxBar) return;
+  chartPie=new Chart(ctxPie,{
+    type:'doughnut',
+    data:{labels:['Ag. Assinaturas','Ag. Validação','Concluída','Cancelada'],
+      datasets:[{data:Object.values(counts),backgroundColor:['#FFC33C','#3C82D2','#28AA5A','#D23C3C'],borderWidth:2,borderColor:'#fff'}]},
+    options:{plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:10}}},cutout:'55%',responsive:true,maintainAspectRatio:false}
+  });
+  chartBar=new Chart(ctxBar,{
+    type:'bar',
+    data:{labels:['0 ass.','1 ass.','2 ass.','Todas'],
+      datasets:[{data:sigs,backgroundColor:['#D23C3C','#D28228','#FFC33C','#28AA5A'],borderRadius:4}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}},responsive:true,maintainAspectRatio:false}
+  });
+}
+function renderSummary(lista){
+  const el=$('summary-panel');
+  if(!el) return;
+  const counts={aguardandoassinaturas:0,aguardandovalidacao:0,concluida:0,cancelada:0};
+  lista.forEach(o=>{const k=String(o.status||'').toLowerCase();if(k in counts)counts[k]++;});
+  el.innerHTML=`
+    <h3>Resumo</h3>
+    <div class="summary-item"><span class="lbl">Total</span><span class="val" style="color:#19234a">${lista.length}</span></div>
+    <div class="summary-item"><span class="lbl">Ag. Assinaturas</span><span class="val" style="color:#a05a00">${counts.aguardandoassinaturas}</span></div>
+    <div class="summary-item"><span class="lbl">Ag. Validação</span><span class="val" style="color:#1E50A0">${counts.aguardandovalidacao}</span></div>
+    <div class="summary-item"><span class="lbl">Concluídas</span><span class="val" style="color:#00824a">${counts.concluida}</span></div>
+    <div class="summary-item"><span class="lbl">Canceladas</span><span class="val" style="color:#aa1e1e">${counts.cancelada}</span></div>`;
+}
+
+/* ── DASHBOARD ── */
+let allOscs=[];
+async function pageDashboard(){
+  const p=perfil(),isAdmin=p==='administrador'||p==='admin';
+  const urlOsc=(p==='emitente')?`/osc/emitente/${userId()}`:`/osc`;
+  const subtitulo=p==='emitente'?'Suas OSs criadas':p==='gerente'?`OSs do setor ${exibirSetor(userSetor())}`:'Todas as OSs';
+  content().innerHTML=`
+    <div class="page-title">Dashboard</div>
+    <div class="page-sub">${subtitulo}</div>
+    <div class="charts-row">
+      <div class="chart-card"><h3>Status das OSs</h3><div style="height:160px"><canvas id="chartPie"></canvas></div></div>
+      <div class="chart-card"><h3>Progresso de Assinaturas</h3><div style="height:160px"><canvas id="chartBar"></canvas></div></div>
+      <div class="summary-card" id="summary-panel"></div>
+    </div>
+    <div class="filter-bar">
+      <input id="f-busca" placeholder="🔍 Descrição ou equipamento..."/>
+      <select id="f-status">
+        <option value="">Todos os status</option>
+        <option value="AguardandoAssinaturas">Ag. Assinaturas</option>
+        <option value="AguardandoValidacao">Ag. Validação</option>
+        <option value="Concluida">Concluída</option>
+        <option value="Cancelada">Cancelada</option>
+      </select>
+      <button class="btn-clear" onclick="document.getElementById('f-busca').value='';document.getElementById('f-status').value='';aplicarFiltros()">✖ Limpar</button>
+    </div>
+    <div class="table-wrap" id="table-area"><div class="loading"><div class="spinner"></div> Buscando dados...</div></div>`;
+  chartPie=null;chartBar=null;
+  try{
+    const r=await api('GET',urlOsc);
+    if(!r.ok){$('table-area').innerHTML=`<div class="empty" style="color:red">Erro ${r.status}</div>`;return;}
+    allOscs=(await r.json()||[]).sort((a,b)=>ordemStatus(a.status)-ordemStatus(b.status)||(b.id-a.id));
+  }catch(e){$('table-area').innerHTML=`<div class="empty" style="color:red">Erro: ${e.message}</div>`;return;}
+  renderCharts(allOscs);renderSummary(allOscs);renderTabelaDashboard(allOscs);
+  $('f-busca').addEventListener('input',aplicarFiltros);
+  $('f-status').addEventListener('change',aplicarFiltros);
+}
+function aplicarFiltros(){
+  const busca=($('f-busca')||{value:''}).value.trim().toLowerCase();
+  const status=($('f-status')||{value:''}).value;
+  const filtered=allOscs.filter(o=>{
+    const okB=!busca||(o.descricao||'').toLowerCase().includes(busca)||(o.equipamento||'').toLowerCase().includes(busca)||(o.emitenteNome||'').toLowerCase().includes(busca);
+    const okS=!status||String(o.status||'').toLowerCase()===status.toLowerCase();
+    return okB&&okS;
+  });
+  renderCharts(filtered);renderSummary(filtered);renderTabelaDashboard(filtered);
+}
+function renderTabelaDashboard(lista){
+  const p=perfil(),isGer=p==='gerente';
+  if(!lista.length){$('table-area').innerHTML='<div class="empty">Nenhuma OS encontrada.</div>';return;}
+  let html=`<div class="table-scroll"><table><thead><tr>
+    <th style="width:50px">ID</th><th>Descrição</th><th>Equipamento</th><th>Emitente</th><th>Data</th><th>Status</th><th>Ass.</th>
+    ${isGer?'<th>Minha ass.</th>':''}
+  </tr></thead><tbody>`;
+  lista.forEach(o=>{
+    const dt=o.dataEmissao?new Date(o.dataEmissao).toLocaleDateString('pt-BR'):'—';
+    const minhaAss=isGer?(jaAssinou(o)?'<span class="badge badge-green">✅</span>':'<span class="badge badge-yellow">⏳</span>'):'';
+    html+=`<tr>
+      <td><strong>${o.id}</strong></td><td>${o.descricao||''}</td><td>${o.equipamento||''}</td>
+      <td>${o.emitenteNome||''}</td><td>${dt}</td><td>${statusBadge(o.status)}</td><td>${signaturasBadge(o)}</td>
+      ${isGer?`<td>${minhaAss}</td>`:''}
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  $('table-area').innerHTML=html;
+}
+
+/* ── CRIAR OS ── */
+function pageCriarOS(){
+  content().innerHTML=`
+    <div class="page-title">Criar Nova OS</div>
+    <div class="page-sub">Preencha os campos para criar uma nova Ordem de Serviço</div>
+    <div class="form-section">
+      <div class="form-group"><label>Descrição</label><input id="c-desc" placeholder="Descreva a ordem de serviço..."/></div>
+      <div class="form-group"><label>Equipamento</label><input id="c-equip" placeholder="Nome ou código do equipamento..."/></div>
+      <div class="form-group"><label>Ação Tomada</label><textarea id="c-acao" placeholder="Descreva a ação tomada..."></textarea></div>
+      <button class="btn-primary" id="btn-salvar-os" onclick="salvarOS()">💾 Salvar OS</button>
+    </div>`;
+}
+async function salvarOS(){
+  const desc=$('c-desc').value.trim(),equip=$('c-equip').value.trim(),acao=$('c-acao').value.trim();
+  if(!desc){alert('Informe a descrição!');return;}
+  if(!equip){alert('Informe o equipamento!');return;}
+  if(!acao){alert('Informe a ação tomada!');return;}
+  const btn=$('btn-salvar-os');btn.disabled=true;btn.textContent='⏳ Salvando...';
+  try{
+    const r=await api('POST','/osc',{descricao:desc,equipamento:equip,acaoTomada:acao,usuarioLogadoId:userId()});
+    if(r.ok){showAlert('OS criada com sucesso!','success');navigate('dashboard');}
+    else showAlert(`Erro: ${r.status} — ${await r.text()}`);
+  }catch(e){showAlert(`Erro: ${e.message}`);}
+  finally{btn.disabled=false;btn.textContent='💾 Salvar OS';}
+}
+
+/* ── ASSINAR OS ── */
+let oscsAssinar=[];
+async function pageAssinar(){
+  closeDetailPanel();
+  content().innerHTML=`
+    <div class="page-title">Assinar OS</div>
+    <div class="page-sub">OSs pendentes — ${exibirSetor(userSetor())} · ${userName()} <span style="font-size:12px;color:#aaa">· clique em uma linha para ver detalhes</span></div>
+    <div class="filter-bar">
+      <input id="fa-busca" placeholder="🔍 Buscar..."/>
+      <select id="fa-prog">
+        <option value="">Todos os progressos</option>
+        <option value="0">0 assinaturas</option>
+        <option value="1">1 assinatura</option>
+        <option value="2">2 assinaturas</option>
+      </select>
+      <button class="btn-clear" onclick="document.getElementById('fa-busca').value='';document.getElementById('fa-prog').value='';filtrarAssinar()">✖ Limpar</button>
+    </div>
+    <div class="table-wrap" id="table-assinar"><div class="loading"><div class="spinner"></div> Buscando...</div></div>`;
+  try{
+    const r=await api('GET',`/osc/gerente/${userId()}`);
+    if(!r.ok){$('table-assinar').innerHTML=`<div class="empty" style="color:red">Erro ${r.status}</div>`;return;}
+    oscsAssinar=await r.json()||[];
+  }catch(e){$('table-assinar').innerHTML=`<div class="empty" style="color:red">${e.message}</div>`;return;}
+  renderTabelaAssinar(oscsAssinar);
+  $('fa-busca').addEventListener('input',filtrarAssinar);
+  $('fa-prog').addEventListener('change',filtrarAssinar);
+}
+function filtrarAssinar(){
+  const busca=($('fa-busca')||{value:''}).value.trim().toLowerCase();
+  const prog=($('fa-prog')||{value:''}).value;
+  const f=oscsAssinar.filter(o=>{
+    const okB=!busca||(o.descricao||'').toLowerCase().includes(busca)||(o.equipamento||'').toLowerCase().includes(busca);
+    const total=(o.qualidadeAssinou?1:0)+(o.engenhariaAssinou?1:0)+(o.producaoAssinou?1:0);
+    return okB&&(prog===''||total===parseInt(prog));
+  });
+  renderTabelaAssinar(f);
+}
+function renderTabelaAssinar(lista){
+  if(!lista.length){$('table-assinar').innerHTML='<div class="empty">✅ Nenhuma OS pendente para o seu setor.</div>';return;}
+  let html=`<div class="table-scroll"><table><thead><tr>
+    <th style="width:50px">ID</th><th>Descrição</th><th>Equipamento</th><th>Progresso</th><th>Status minha ass.</th>
+  </tr></thead><tbody>`;
+  lista.forEach(o=>{
+    const total=(o.qualidadeAssinou?1:0)+(o.engenhariaAssinou?1:0)+(o.producaoAssinou?1:0);
+    const jaSig=jaAssinou(o);
+    const cls=total===3?'badge-green':total>0?'badge-yellow':'badge-red';
+    const selected = currentDetailId===o.id ? 'row-selected' : '';
+    html+=`<tr class="clickable ${selected}" data-os-id="${o.id}" onclick="abrirDetalheOS(${o.id})">
+      <td><strong>${o.id}</strong></td>
+      <td>${o.descricao||''}</td>
+      <td>${o.equipamento||''}</td>
+      <td><span class="badge ${cls}">${total}/3</span></td>
+      <td>${jaSig?'<span class="badge badge-green">✅ Assinado</span>':'<span class="badge badge-yellow">⏳ Pendente</span>'}</td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  $('table-assinar').innerHTML=html;
+}
+function abrirDetalheOS(id){
+  // toggle: clicou na mesma OS já aberta → fecha
+  if(currentDetailId===id){
+    closeDetailPanel();
+    return;
+  }
+  const os=oscsAssinar.find(o=>o.id===id);
+  if(os) openDetailPanel(os);
+}
+async function assinarOSPanel(id,desc){
+  if(!confirm(`Confirma assinatura da OS-${String(id).padStart(3,'0')}?\n\n${desc}`)) return;
+  const btn=document.querySelector('#panel-footer .btn-sign');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Assinando...';}
+  try{
+    const r=await fetch(`${URL_BASE}/osc/${id}/assinar`,{method:'POST',headers:headers(),body:String(userId())});
+    if(r.ok){
+      showAlert('OS assinada com sucesso!','success');
+      closeDetailPanel();
+      await pageAssinar();
+    }else if(r.status===401) showAlert('Sem permissão para assinar.');
+    else showAlert(`Erro: ${await r.text()}`);
+  }catch(e){showAlert(`Erro: ${e.message}`);}
+  finally{if(btn){btn.disabled=false;btn.textContent='✍️ Assinar esta OS';}}
+}
+
+/* ── GERENCIAR OSs ── */
+let oscsGerenciar=[];
+async function pageGerenciarOscs(){
+  content().innerHTML=`
+    <div class="page-title">🛠️ Gerenciar OSs</div>
+    <div class="page-sub">Conclua ou cancele OSs ativas</div>
+    <div class="filter-bar">
+      <input id="go-busca" placeholder="🔍 Buscar..."/>
+      <select id="go-status">
+        <option value="">Todos os status</option>
+        <option value="aguardandoassinaturas">Ag. Assinaturas</option>
+        <option value="aguardandovalidacao">Ag. Validação</option>
+      </select>
+      <button class="btn-clear" onclick="document.getElementById('go-busca').value='';document.getElementById('go-status').value='';filtrarGerOscs()">✖ Limpar</button>
+    </div>
+    <div class="table-wrap" id="table-ger-oscs"><div class="loading"><div class="spinner"></div> Buscando...</div></div>`;
+  try{
+    const r=await api('GET','/osc');
+    if(!r.ok){$('table-ger-oscs').innerHTML=`<div class="empty" style="color:red">Erro ${r.status}</div>`;return;}
+    const all=await r.json()||[];
+    oscsGerenciar=all.filter(o=>{const s=String(o.status||'').toLowerCase();return s==='aguardandoassinaturas'||s==='aguardandovalidacao';});
+  }catch(e){$('table-ger-oscs').innerHTML=`<div class="empty" style="color:red">${e.message}</div>`;return;}
+  renderTabelaGerOscs(oscsGerenciar);
+  $('go-busca').addEventListener('input',filtrarGerOscs);
+  $('go-status').addEventListener('change',filtrarGerOscs);
+}
+function filtrarGerOscs(){
+  const busca=($('go-busca')||{value:''}).value.trim().toLowerCase();
+  const status=($('go-status')||{value:''}).value;
+  const f=oscsGerenciar.filter(o=>{
+    const okB=!busca||(o.descricao||'').toLowerCase().includes(busca)||(o.equipamento||'').toLowerCase().includes(busca)||(o.emitenteNome||'').toLowerCase().includes(busca);
+    const okS=!status||String(o.status||'').toLowerCase()===status;
+    return okB&&okS;
+  });
+  renderTabelaGerOscs(f);
+}
+function renderTabelaGerOscs(lista){
+  if(!lista.length){$('table-ger-oscs').innerHTML='<div class="empty">Nenhuma OS ativa.</div>';return;}
+  let html=`<div class="table-scroll"><table><thead><tr><th style="width:50px">ID</th><th>Descrição</th><th>Emitente</th><th>Status</th><th>Ass.</th><th style="width:160px">Ações</th></tr></thead><tbody>`;
+  lista.forEach(o=>{
+    const podeConc=String(o.status||'').toLowerCase()==='aguardandovalidacao';
+    html+=`<tr>
+      <td><strong>${o.id}</strong></td><td>${o.descricao||''}</td><td>${o.emitenteNome||''}</td>
+      <td>${statusBadge(o.status)}</td><td>${signaturasBadge(o)}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm-green" ${podeConc?'':'disabled title="Aguarda assinaturas"'} onclick="acaoOsc(${o.id},'concluir','${(o.descricao||'').replace(/'/g,"\\'")}')">✅ Concluir</button>
+        <button class="btn-sm-red" onclick="acaoOsc(${o.id},'cancelar','${(o.descricao||'').replace(/'/g,"\\'")}')">❌ Cancelar</button>
+      </div></td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  $('table-ger-oscs').innerHTML=html;
+}
+async function acaoOsc(id,acao,desc){
+  const msg=acao==='concluir'?`Concluir OS-${String(id).padStart(3,'0')}?\n\n${desc}`:`Cancelar OS-${String(id).padStart(3,'0')}? Não pode ser desfeito.\n\n${desc}`;
+  if(!confirm(msg)) return;
+  try{
+    const r=await fetch(`${URL_BASE}/osc/${id}/${acao}`,{method:'PUT',headers:headers(),body:String(userId())});
+    if(r.ok){showAlert(acao==='concluir'?'OS concluída!':'OS cancelada!','success');pageGerenciarOscs();}
+    else showAlert(`Erro: ${await r.text()}`);
+  }catch(e){showAlert(`Erro: ${e.message}`);}
+}
+
+/* ── GERENCIAR USUÁRIOS ── */
+let todosUsuarios=[];
+async function pageUsuarios(){
+  content().innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:10px" class="page-header-row">
+      <div class="page-title" style="margin:0">👥 Usuários</div>
+      <button class="btn-success" onclick="abrirModalUsuario(null)">➕ Novo Usuário</button>
+    </div>
+    <div class="page-sub">Cadastre, edite ou remova usuários</div>
+    <div class="filter-bar">
+      <input id="u-busca" placeholder="🔍 Nome ou email..."/>
+      <select id="u-perfil">
+        <option value="">Todos os perfis</option>
+        <option>Emitente</option><option>Gerente</option><option>Administrador</option>
+      </select>
+      <select id="u-setor">
+        <option value="">Todos os setores</option>
+        <option>Garantia de Validação</option><option>Mecatrônica</option><option>Operação</option><option>Nenhum</option>
+      </select>
+      <button class="btn-clear" onclick="limparFiltrosUser()">✖ Limpar</button>
+    </div>
+    <div class="table-wrap" id="table-usuarios"><div class="loading"><div class="spinner"></div> Buscando...</div></div>`;
+  try{
+    const r=await api('GET','/usuarios');
+    if(!r.ok){$('table-usuarios').innerHTML=`<div class="empty" style="color:red">Erro ${r.status}</div>`;return;}
+    todosUsuarios=await r.json()||[];
+  }catch(e){$('table-usuarios').innerHTML=`<div class="empty" style="color:red">${e.message}</div>`;return;}
+  renderTabelaUsuarios(todosUsuarios);
+  $('u-busca').addEventListener('input',filtrarUsuarios);
+  $('u-perfil').addEventListener('change',filtrarUsuarios);
+  $('u-setor').addEventListener('change',filtrarUsuarios);
+}
+function limparFiltrosUser(){$('u-busca').value='';$('u-perfil').value='';$('u-setor').value='';filtrarUsuarios();}
+function filtrarUsuarios(){
+  const busca=($('u-busca')||{value:''}).value.trim().toLowerCase();
+  const perf=($('u-perfil')||{value:''}).value;
+  const setor=($('u-setor')||{value:''}).value;
+  const f=todosUsuarios.filter(u=>{
+    const okB=!busca||(u.Nome||u.nome||'').toLowerCase().includes(busca)||(u.Email||u.email||'').toLowerCase().includes(busca);
+    const okP=!perf||String(u.Perfil||u.perfil||'').toLowerCase()===perf.toLowerCase();
+    const setorApi=setorParaApi(setor);
+    const okS=!setor||String(u.Setor||u.setor||'').toLowerCase()===setorApi.toLowerCase();
+    return okB&&okP&&okS;
+  });
+  renderTabelaUsuarios(f);
+}
+function renderTabelaUsuarios(lista){
+  if(!lista.length){$('table-usuarios').innerHTML='<div class="empty">Nenhum usuário encontrado.</div>';return;}
+  let html=`<div class="table-scroll"><table><thead><tr><th style="width:40px">ID</th><th>Nome</th><th>Perfil</th><th>Setor</th><th style="width:110px">Ações</th></tr></thead><tbody>`;
+  lista.forEach(u=>{
+    const id=u.Id||u.id,nome=u.Nome||u.nome||'',perf=u.Perfil||u.perfil||'',setor=exibirSetor(u.Setor||u.setor);
+    html+=`<tr>
+      <td>${id}</td><td><strong>${nome}</strong></td><td>${perf}</td><td>${setor}</td>
+      <td style="display:flex;gap:5px;padding:7px 8px">
+        <button class="btn-edit" onclick="abrirModalUsuario(${id})">✏️</button>
+        <button class="btn-del"  onclick="excluirUsuario(${id},'${nome.replace(/'/g,"\\'")}')">🗑️</button>
+      </td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  $('table-usuarios').innerHTML=html;
+}
+function abrirModalUsuario(id){
+  const u=id?todosUsuarios.find(x=>(x.Id||x.id)===id):null;
+  const editando=!!u;
+  const nome=u?(u.Nome||u.nome||''):'';
+  const email=u?(u.Email||u.email||''):'';
+  const perf=u?(u.Perfil||u.perfil||'Emitente'):'Emitente';
+  const setor=u?exibirSetor(u.Setor||u.setor):'Garantia de Validação';
+  openModal(`
+    <h2>${editando?'Editar Usuário':'Novo Usuário'}</h2>
+    <div class="form-group"><label>Nome</label><input id="m-nome" value="${nome}"/></div>
+    <div class="form-group"><label>Email</label><input id="m-email" type="email" value="${email}"/></div>
+    <div class="form-group"><label>Senha${editando?' (em branco = não altera)':''}</label><input id="m-senha" type="password"/></div>
+    <div class="form-group"><label>Perfil</label>
+      <select id="m-perfil">${['Emitente','Gerente','Administrador'].map(p=>`<option ${p===perf?'selected':''}>${p}</option>`).join('')}</select></div>
+    <div class="form-group"><label>Setor</label>
+      <select id="m-setor">${['Garantia de Validação','Mecatrônica','Operação','Nenhum'].map(s=>`<option ${s===setor?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="modal-footer">
+      <button class="btn-primary" id="m-salvar" onclick="salvarUsuario(${id||'null'})">💾 Salvar</button>
+      <button class="btn-clear" onclick="closeModal()">Cancelar</button>
+    </div>`);
+}
+async function salvarUsuario(id){
+  const nome=$('m-nome').value.trim(),email=$('m-email').value.trim(),senha=$('m-senha').value;
+  const perf=$('m-perfil').value,setor=setorParaApi($('m-setor').value),editando=!!id;
+  if(!nome){alert('Informe o nome.');return;}
+  if(!email){alert('Informe o email.');return;}
+  if(!editando&&!senha){alert('Informe a senha.');return;}
+  const btn=$('m-salvar');btn.disabled=true;btn.textContent='⏳ Salvando...';
+  try{
+    let r;
+    if(editando){
+      const body=senha?{nome,email,senha,perfil:perf,setor}:{nome,email,perfil:perf,setor};
+      r=await api('PUT',`/usuarios/${id}`,body);
+    }else{
+      r=await api('POST','/usuarios',{adminId:userId(),nome,email,senha,perfil:perf,setor});
+    }
+    if(r.ok){closeModal();showAlert(editando?'Usuário atualizado!':'Usuário criado!','success');pageUsuarios();}
+    else showAlert(`Erro: ${r.status} — ${await r.text()}`);
+  }catch(e){showAlert(`Erro: ${e.message}`);}
+  finally{if(btn){btn.disabled=false;btn.textContent='💾 Salvar';}}
+}
+async function excluirUsuario(id,nome){
+  if(!confirm(`Excluir "${nome}"? Não pode ser desfeito.`)) return;
+  try{
+    const r=await api('DELETE',`/usuarios/${id}`);
+    if(r.ok){showAlert('Usuário excluído!','success');pageUsuarios();}
+    else showAlert(`Erro: ${await r.text()}`);
+  }catch(e){showAlert(`Erro: ${e.message}`);}
+}
+
+/* ══════════════════════════════════════════
+   EXPORTAR PDF
+══════════════════════════════════════════ */
+let todasOscsExport = [];
+
+async function pageExportar(){
+  content().innerHTML=`
+    <div class="page-title">📄 Exportar OSs como PDF</div>
+    <div class="page-sub">Selecione as OSs que deseja exportar e clique em Gerar PDF</div>
+    <div class="filter-bar">
+      <input id="ex-busca" placeholder="🔍 Buscar por descrição ou equipamento..."/>
+      <select id="ex-status">
+        <option value="">Todos os status</option>
+        <option value="aguardandoassinaturas">Ag. Assinaturas</option>
+        <option value="aguardandovalidacao">Ag. Validação</option>
+        <option value="concluida">Concluída</option>
+        <option value="cancelada">Cancelada</option>
+      </select>
+      <button class="btn-clear" onclick="limparFiltrosExport()">✖ Limpar</button>
+    </div>
+    <div id="export-area"><div class="loading"><div class="spinner"></div> Buscando OSs...</div></div>`;
+  try{
+    const p=perfil(), isAdmin=p==='administrador'||p==='admin';
+    const url=(p==='emitente')?`/osc/emitente/${userId()}`:`/osc`;
+    const r=await api('GET',url);
+    if(!r.ok){$('export-area').innerHTML=`<div class="empty" style="color:red">Erro ${r.status}</div>`;return;}
+    todasOscsExport=(await r.json()||[]).sort((a,b)=>ordemStatus(a.status)-ordemStatus(b.status)||(b.id-a.id));
+  }catch(e){$('export-area').innerHTML=`<div class="empty" style="color:red">${e.message}</div>`;return;}
+  renderListaExport(todasOscsExport);
+  $('ex-busca').addEventListener('input',filtrarExport);
+  $('ex-status').addEventListener('change',filtrarExport);
+}
+
+function limparFiltrosExport(){
+  $('ex-busca').value='';$('ex-status').value='';filtrarExport();
+}
+function filtrarExport(){
+  const busca=($('ex-busca')||{value:''}).value.trim().toLowerCase();
+  const status=($('ex-status')||{value:''}).value;
+  const f=todasOscsExport.filter(o=>{
+    const okB=!busca||(o.descricao||'').toLowerCase().includes(busca)||(o.equipamento||'').toLowerCase().includes(busca)||(o.emitenteNome||'').toLowerCase().includes(busca);
+    const okS=!status||String(o.status||'').toLowerCase()===status;
+    return okB&&okS;
+  });
+  renderListaExport(f);
+}
+
+function dotExport(status){
+  const s=String(status||'').toLowerCase();
+  if(s==='concluida')              return 'dot-green';
+  if(s==='cancelada')              return 'dot-red';
+  if(s==='aguardandovalidacao')    return 'dot-blue';
+  return 'dot-yellow';
+}
+
+function renderListaExport(lista){
+  const area=$('export-area');
+  if(!lista.length){area.innerHTML='<div class="empty">Nenhuma OS encontrada.</div>';return;}
+  area.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <label class="export-select-all">
+        <input type="checkbox" id="chk-all" onchange="toggleSelectAll(this.checked)"/> Selecionar todas
+        <span class="export-count" id="export-count-label">0 selecionadas</span>
+      </label>
+    </div>
+    <div class="table-wrap export-list" id="export-list-items">
+      ${lista.map(o=>{
+        const s=String(o.status||'').toLowerCase();
+        const statusLabel={aguardandoassinaturas:'Ag. Assinaturas',aguardandovalidacao:'Ag. Validação',concluida:'Concluída',cancelada:'Cancelada'}[s]||o.status||'—';
+        const total=(o.qualidadeAssinou?1:0)+(o.engenhariaAssinou?1:0)+(o.producaoAssinou?1:0);
+        const dt=o.dataEmissao?new Date(o.dataEmissao).toLocaleDateString('pt-BR'):'—';
+        return `<label class="export-item" for="chk-os-${o.id}">
+          <input type="checkbox" id="chk-os-${o.id}" data-id="${o.id}" onchange="atualizarContador()"/>
+          <span class="export-status-dot ${dotExport(o.status)}"></span>
+          <div class="export-item-info">
+            <div class="export-item-title">OS-${String(o.id).padStart(3,'0')} — ${o.descricao||''}</div>
+            <div class="export-item-sub">${o.equipamento||'—'} · ${o.emitenteNome||'—'} · ${dt} · ${statusLabel} · ${total}/3 ass.</div>
+          </div>
+        </label>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
+      <button class="btn-export-pdf" id="btn-gerar-pdf" onclick="gerarPDF()" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Gerar PDF
+      </button>
+      <button class="btn-clear" onclick="limparFiltrosExport()">✖ Limpar filtros</button>
+    </div>`;
+  atualizarContador();
+}
+
+function toggleSelectAll(checked){
+  document.querySelectorAll('#export-list-items input[type=checkbox]').forEach(c=>c.checked=checked);
+  atualizarContador();
+}
+function atualizarContador(){
+  const selecionadas=document.querySelectorAll('#export-list-items input[type=checkbox]:checked').length;
+  const total=document.querySelectorAll('#export-list-items input[type=checkbox]').length;
+  const label=$('export-count-label');
+  const btn=$('btn-gerar-pdf');
+  if(label) label.textContent=`${selecionadas} de ${total} selecionadas`;
+  if(btn)   btn.disabled=selecionadas===0;
+  const chkAll=$('chk-all');
+  if(chkAll){chkAll.checked=selecionadas===total&&total>0;chkAll.indeterminate=selecionadas>0&&selecionadas<total;}
+}
+
+function gerarPDF(){
+  const ids=[...document.querySelectorAll('#export-list-items input[type=checkbox]:checked')].map(c=>parseInt(c.dataset.id));
+  const oscs=todasOscsExport.filter(o=>ids.includes(o.id));
+  if(!oscs.length) return;
+
+  const agora=new Date();
+  const dtExport=agora.toLocaleDateString('pt-BR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const hrExport=agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const exportadoPor=userName();
+
+  function statusInfo(s){
+    const k=String(s||'').toLowerCase();
+    const map={
+      concluida:            {label:'CONCLUÍDA',       color:'#166534',bg:'#dcfce7',border:'#86efac',icon:'✅',stripe:'#dcfce7'},
+      cancelada:            {label:'CANCELADA',        color:'#991b1b',bg:'#fee2e2',border:'#fca5a5',icon:'❌',stripe:'#fee2e2'},
+      aguardandovalidacao:  {label:'AG. VALIDAÇÃO',    color:'#1e40af',bg:'#dbeafe',border:'#93c5fd',icon:'🔵',stripe:'#dbeafe'},
+      aguardandoassinaturas:{label:'AG. ASSINATURAS',  color:'#92400e',bg:'#fef3c7',border:'#fcd34d',icon:'⚠️',stripe:'#fef3c7'},
+    };
+    return map[k]||{label:s||'—',color:'#374151',bg:'#f3f4f6',border:'#d1d5db',icon:'',stripe:'#f9fafb'};
+  }
+
+  function sigRow(label, assinou){
+    return `<tr>
+      <td style="padding:7px 12px;font-size:12px;color:#374151;border-bottom:1px solid #f0f2f6">${label}</td>
+      <td style="padding:7px 12px;font-size:13px;font-weight:700;border-bottom:1px solid #f0f2f6;color:${assinou?'#166534':'#92400e'}">
+        ${assinou?'✅ Assinado':'⏳ Pendente'}
+      </td>
+    </tr>`;
+  }
+
+  // cover page
+  const coverHTML=`
+    <div class="pdf-cover">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:40px">
+        <div>
+          <div style="font-size:28px;font-weight:800;color:#1E50A0;margin-bottom:6px">📋 Relatório de Ordens de Serviço</div>
+          <div style="font-size:14px;color:#6b7280">Gerenciador de OS — Relatório exportado</div>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#6b7280;line-height:1.7">
+          <div><strong>Data:</strong> ${dtExport}</div>
+          <div><strong>Horário:</strong> ${hrExport}</div>
+          <div><strong>Exportado por:</strong> ${exportadoPor}</div>
+        </div>
+      </div>
+      <hr style="border:none;border-top:2px solid #1E50A0;margin-bottom:32px"/>
+      <div style="margin-bottom:24px">
+        <div style="font-size:16px;font-weight:700;color:#19234a;margin-bottom:16px">Resumo deste relatório</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+          ${[
+            {label:'Total de OSs',val:oscs.length,color:'#19234a'},
+            {label:'Concluídas',val:oscs.filter(o=>String(o.status||'').toLowerCase()==='concluida').length,color:'#166534'},
+            {label:'Canceladas',val:oscs.filter(o=>String(o.status||'').toLowerCase()==='cancelada').length,color:'#991b1b'},
+            {label:'Pendentes',val:oscs.filter(o=>!['concluida','cancelada'].includes(String(o.status||'').toLowerCase())).length,color:'#92400e'},
+          ].map(c=>`
+            <div style="background:#f9fafb;border:1px solid #e5e9f0;border-radius:10px;padding:16px;text-align:center">
+              <div style="font-size:28px;font-weight:800;color:${c.color}">${c.val}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:4px">${c.label}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div style="font-size:14px;font-weight:700;color:#19234a;margin-bottom:12px">OSs incluídas neste relatório:</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#1e1e1e">
+            <th style="color:#fff;padding:8px 10px;text-align:left;font-weight:700">#</th>
+            <th style="color:#fff;padding:8px 10px;text-align:left;font-weight:700">OS</th>
+            <th style="color:#fff;padding:8px 10px;text-align:left;font-weight:700">Equipamento</th>
+            <th style="color:#fff;padding:8px 10px;text-align:left;font-weight:700">Emitente</th>
+            <th style="color:#fff;padding:8px 10px;text-align:left;font-weight:700">Status</th>
+            <th style="color:#fff;padding:8px 10px;text-align:left;font-weight:700">Ass.</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${oscs.map((o,i)=>{
+            const info=statusInfo(o.status);
+            const total=(o.qualidadeAssinou?1:0)+(o.engenhariaAssinou?1:0)+(o.producaoAssinou?1:0);
+            return `<tr style="background:${i%2===0?'#fff':'#f9fafb'}">
+              <td style="padding:7px 10px;color:#888">${i+1}</td>
+              <td style="padding:7px 10px;font-weight:700;color:#1E50A0">OS-${String(o.id).padStart(3,'0')}</td>
+              <td style="padding:7px 10px;color:#374151">${o.equipamento||'—'}</td>
+              <td style="padding:7px 10px;color:#374151">${o.emitenteNome||'—'}</td>
+              <td style="padding:7px 10px">
+                <span style="background:${info.bg};color:${info.color};border:1px solid ${info.border};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${info.label}</span>
+              </td>
+              <td style="padding:7px 10px;font-weight:700;color:${total===3?'#166534':total>0?'#92400e':'#991b1b'}">${total}/3</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e9f0;font-size:11px;color:#9ca3af;text-align:center">
+        Documento gerado automaticamente pelo Gerenciador de OS em ${dtExport} às ${hrExport}
+      </div>
+    </div>`;
+
+  // one page per OS
+  const osPages=oscs.map(o=>{
+    const info=statusInfo(o.status);
+    const dt=o.dataEmissao?new Date(o.dataEmissao).toLocaleString('pt-BR',{dateStyle:'full',timeStyle:'short'}):'—';
+    const total=(o.qualidadeAssinou?1:0)+(o.engenhariaAssinou?1:0)+(o.producaoAssinou?1:0);
+    return `
+    <div class="pdf-os">
+      <!-- status banner -->
+      <div style="background:${info.bg};border:2px solid ${info.border};border-radius:10px;padding:14px 20px;margin-bottom:24px;display:flex;align-items:center;gap:14px">
+        <span style="font-size:32px;line-height:1">${info.icon}</span>
+        <div>
+          <div style="font-size:20px;font-weight:800;color:${info.color}">${info.label}</div>
+          <div style="font-size:12px;color:${info.color};opacity:.75;margin-top:2px">
+            ${total}/3 assinaturas · OS-${String(o.id).padStart(3,'0')}
+          </div>
+        </div>
+        <div style="margin-left:auto;text-align:right;font-size:11px;color:#6b7280;line-height:1.8">
+          <div><strong>Exportado em:</strong> ${dtExport}</div>
+          <div><strong>Horário:</strong> ${hrExport}</div>
+        </div>
+      </div>
+
+      <!-- header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #e5e9f0">
+        <div>
+          <div style="font-size:22px;font-weight:800;color:#1E50A0">OS-${String(o.id).padStart(3,'0')}</div>
+          <div style="font-size:13px;color:#6b7280;margin-top:2px">Ordem de Serviço</div>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#6b7280;line-height:1.9">
+          <div><strong>Data de Emissão:</strong> ${dt}</div>
+          <div><strong>Emitente:</strong> ${o.emitenteNome||'—'}</div>
+        </div>
+      </div>
+
+      <!-- info grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div style="background:#f9fafb;border:1px solid #e5e9f0;border-radius:8px;padding:14px">
+          <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Equipamento</div>
+          <div style="font-size:14px;font-weight:600;color:#1a1a1a">${o.equipamento||'—'}</div>
+        </div>
+        <div style="background:#f9fafb;border:1px solid #e5e9f0;border-radius:8px;padding:14px">
+          <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Status</div>
+          <div style="font-size:14px;font-weight:700;color:${info.color}">${info.label}</div>
+        </div>
+      </div>
+
+      <!-- descrição -->
+      <div style="background:#f9fafb;border:1px solid #e5e9f0;border-radius:8px;padding:14px;margin-bottom:16px">
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Descrição</div>
+        <div style="font-size:13px;color:#1a1a1a;line-height:1.6;white-space:pre-wrap">${o.descricao||'—'}</div>
+      </div>
+
+      <!-- ação tomada -->
+      <div style="background:#f9fafb;border:1px solid #e5e9f0;border-radius:8px;padding:14px;margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ação Tomada</div>
+        <div style="font-size:13px;color:#1a1a1a;line-height:1.6;white-space:pre-wrap">${o.acaoTomada||'—'}</div>
+      </div>
+
+      <!-- assinaturas -->
+      <div style="border:1px solid #e5e9f0;border-radius:8px;overflow:hidden;margin-bottom:20px">
+        <div style="background:#1e1e1e;padding:10px 14px">
+          <span style="color:#fff;font-size:12px;font-weight:700">ASSINATURAS (${total}/3)</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;border-bottom:1px solid #e5e9f0">Setor</th>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;border-bottom:1px solid #e5e9f0">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sigRow('Garantia de Validação (Qualidade)', o.qualidadeAssinou)}
+            ${sigRow('Mecatrônica (Engenharia)', o.engenhariaAssinou)}
+            ${sigRow('Operação (Produção)', o.producaoAssinou)}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- rodapé -->
+      <div style="padding-top:12px;border-top:1px solid #e5e9f0;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between">
+        <span>Gerenciador de OS — Documento gerado automaticamente</span>
+        <span>OS-${String(o.id).padStart(3,'0')} · ${dtExport} · ${hrExport}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  $('print-area').innerHTML = coverHTML + osPages;
+  setTimeout(()=>{
+    window.print();
+    setTimeout(()=>{ $('print-area').innerHTML=''; }, 1000);
+  }, 150);
+}
+
+const pages={dashboard:pageDashboard,criar:pageCriarOS,assinar:pageAssinar,oscs:pageGerenciarOscs,usuarios:pageUsuarios,exportar:pageExportar};
+setupNav();
+navigate('dashboard');
+</script>
+</body>
+</html>
