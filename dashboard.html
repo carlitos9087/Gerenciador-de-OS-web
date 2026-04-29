@@ -172,6 +172,8 @@ tbody tr.row-selected{background:#ddeaff !important;border-left:3px solid #1E50A
 .btn-export-pdf:disabled{background:#aaa;cursor:not-allowed}
 .nav-btn-export{color:#7c3aed !important}
 .nav-btn-export.active{background:#7c3aed !important;color:#fff !important}
+.nav-btn-download{color:#0369a1 !important;text-decoration:none;border-top:1px solid #e0e4ef;margin-top:4px}
+.nav-btn-download:hover{background:#f0f8ff !important;color:#0c4a6e !important}
 
 /* ══ PRINT / PDF ══ */
 @media print{
@@ -250,6 +252,9 @@ tbody tr.row-selected{background:#ddeaff !important;border-left:3px solid #1E50A
     <button class="nav-btn" id="nav-usuarios" onclick="navigate('usuarios')">👥 Gerenciar Usuários</button>
     <button class="nav-btn" id="nav-oscs"     onclick="navigate('oscs')">🛠️ Gerenciar OSs</button>
     <button class="nav-btn nav-btn-export" id="nav-exportar" onclick="navigate('exportar')">📄 Exportar PDF</button>
+    <a class="nav-btn nav-btn-download" id="nav-download-app" href="instalador-gerenciador-os.exe" download title="Baixar o aplicativo desktop">
+      💾 Baixar App Desktop
+    </a>
   </nav>
   <main id="content">
     <div class="loading"><div class="spinner"></div> Carregando...</div>
