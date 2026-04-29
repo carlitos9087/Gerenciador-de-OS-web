@@ -280,7 +280,7 @@ const URL_BASE = 'https://triumphant-clarity-production-264b.up.railway.app';
 let token = localStorage.getItem('os_token') || '';
 let usuario = null;
 try { usuario = JSON.parse(localStorage.getItem('os_usuario') || 'null'); } catch(e){}
-if (!token || !usuario) { window.location.href = 'login.html'; }
+if (!token || !usuario) { window.location.href = 'index.html'; }
 
 /* ── SIDEBAR ── */
 function toggleSidebar(){
@@ -472,7 +472,7 @@ $('btn-sair').onclick=()=>{
   if(confirm('Deseja sair da conta?')){
     localStorage.removeItem('os_token');
     localStorage.removeItem('os_usuario');
-    window.location.href='login.html';
+    window.location.href='index.html';
   }
 };
 
